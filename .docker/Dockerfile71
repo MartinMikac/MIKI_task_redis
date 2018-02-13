@@ -1,0 +1,103 @@
+FROM php:7.1-apache
+RUN apt-get update && apt-get install -y \
+        libfreetype6-dev \
+        libjpeg62-turbo-dev \
+        libmcrypt-dev \
+        libpng12-dev \
+    && docker-php-ext-install -j$(nproc) iconv mcrypt mysqli \
+    && docker-php-ext-configure gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/ \
+    && docker-php-ext-install -j$(nproc) gd \
+    && apt-get install -y git zlib1g-dev \
+    && docker-php-ext-install zip \
+    && a2enmod rewrite \
+    && mv /var/www/html /var/www/public \
+    && curl -sS https://getcomposer.org/installer \
+    | php -- --install-dir=/usr/local/bin --filename=composer
+    
+
+# install ODBC driver
+#RUN curl http://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+#RUN curl http://packages.microsoft.com/config/debian/8/prod.list > /etc/apt/sources.list.d/mssql-release.list
+#RUN ACCEPT_EULA=Y apt-get install -y unixodbc-dev
+#RUN set -xe \
+#    && pecl install pdo_sqlsrv \
+#    && docker-php-ext-enable pdo_sqlsrv \
+#    && apt-get purge -y unixodbc-dev && apt-get autoremove -y && apt-get clean
+
+
+# Install needed php extensions: ldap
+#
+RUN apt-get install libldap2-dev -y && \
+    docker-php-ext-configure ldap --with-libdir=lib/x86_64-linux-gnu/ && \
+    docker-php-ext-install ldap
+
+#RUN ln -s /usr/lib/x86_64-linux-gnu/libldap.so /usr/lib/libldap.so \
+#    && ln -s /usr/lib/x86_64-linux-gnu/liblber.so /usr/lib/liblber.so
+    
+        
+
+
+
+# Install intl
+RUN apt-get install -y libicu-dev
+#RUN pecl install intl
+RUN docker-php-ext-install intl
+
+# Install PDO
+# RUN apt-get install -y freetds-dev php5-sybase
+# RUN docker-php-ext-install pdo 
+RUN docker-php-ext-install pdo_mysql
+# RUN docker-php-ext-install pdo_oci
+# RUN docker-php-ext-install pdo_odbc
+
+#RUN apt-get install -y libpq-dev
+#RUN docker-php-ext-install pdo_pgsql
+
+#RUN apt-get install php-ldap -y
+
+# RUN apt-get install -y libsqlite3-dev
+# RUN docker-php-ext-install pdo_sqlite    
+    
+
+# Install xdebug
+
+# !!! change actual IP adress of localhost at xdebug.remote_host= . . . . !!!
+
+RUN pecl install xdebug \
+    && docker-php-ext-enable xdebug \
+    && echo "error_reporting = E_ALL" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "display_startup_errors = On" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "display_errors = On" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_enable=1" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.default_enable=0" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.idekey=netbeans-xdebug" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_handler=dbgp" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_connect_back=0" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_enable = 1" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_host=192.168.1.104" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_port=9000" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.remote_autostart=1" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.profiler_enable=1" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.profiler_output_dir=/tmp/snapshots" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo "xdebug.profiler_enable_trigger=1" >> /usr/local/etc/php/conf.d/docker-php-ext-xdebug.ini \
+    && echo 'alias sf="php app/console"' >> ~/.bashrc \
+    && echo 'alias sf3="php bin/console"' >> ~/.bashrc \
+    && echo 'alias mage="php bin/magento"' >> ~/.bashrc    
+
+WORKDIR /var/www
+    
+    
+
+RUN a2enmod rewrite headers
+
+RUN a2dissite 000-default
+
+COPY php.ini /usr/local/etc/php/conf.d/php.ini
+
+COPY virtualhost-php71.conf /etc/apache2/sites-available/001-virtualhost-php71.conf
+RUN a2ensite 001-virtualhost-php71
+
+RUN touch /var/www/71_error.log /var/www/71_access.log
+RUN chown www-data:www-data /var/www/71_error.log /var/www/71_access.log
+
+EXPOSE 9000
